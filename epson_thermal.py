@@ -1,7 +1,6 @@
 # Constants as byte arrays
-NL = b"\x0A"
+LF = b"\x0A"
 ASCII_TAB = b"\t"  # Horizontal tab
-ASCII_LF = b"\n"  # Line feed
 ASCII_FF = b"\f"  # Form feed
 ASCII_CR = b"\r"  # Carriage return
 
@@ -9,6 +8,7 @@ ASCII_CR = b"\r"  # Carriage return
 ESC_BANG = b"\x1B!"  # Command to change print mode
 ESC_AT = b"\x1B@"  # Command to reset printer
 ESC_V = b"\x1BV"  # Command to rotate text 90 degrees
+ESC_a = b"\x1Ba"  # Justification
 ESC_CURLY = b"\x1B{"  # Command to print upside down
 GS_BANG = b"\x1D!"  # Command to set magnification
 
@@ -42,7 +42,7 @@ class ThermalPrinter:
         # Write to the uart without using (or changing) the buffer
         self.uart.write(data)
         if feed:
-            self.uart.write(NL * feed)
+            self.uart.write(LF * feed)
 
     def clear_buffer(self):
         self.buff = bytearray()
@@ -50,12 +50,12 @@ class ThermalPrinter:
     def add_bytes(self, data, feed=0):
         self.buff.extend(data)
         if feed:
-            self.buff.extend(NL * feed)
+            self.buff.extend(LF * feed)
 
     def add_text(self, text, feed=1):
         self.buff.extend(text.encode())
         if feed:
-            self.buff.extend(NL * feed)
+            self.buff.extend(LF * feed)
 
     def reset_print_mode(self):
         self.printmode = 0
@@ -77,7 +77,7 @@ class ThermalPrinter:
         self.buff.extend(ESC_BANG + bytes([self.printmode]))
 
     def newline(self, feed=1):
-        self.buff.extend(NL * feed)
+        self.buff.extend(LF * feed)
 
     # The following print modes all use ESC ! <mode>, and allow for toggling
     def _set_mode(self, setting, mask):
@@ -125,6 +125,27 @@ class ThermalPrinter:
         if height is None:
             height = 1
 
-        value = ((width - 1) << 4 ) | (height - 1)
-        print(width, height, value)
+        value = ((width - 1) << 4) | (height - 1)
+        # print(width, height, value)
         self.buff.extend(GS_BANG + bytes([value]))
+
+    def set_justification(self, justify="L"):
+        # If buffer doesn't end in a newline, add one
+        if len(self.buff) > 0 and self.buff[-1] != LF:
+            self.buff.extend(LF)
+        # Set justification as Center, Right or Left (all else)
+        if justify.lower()[0] == "c":
+            self.buff.extend(ESC_a + b"\x01")
+        elif justify.lower()[0] == "r":
+            self.buff.extend(ESC_a + b"\x02")
+        else:
+            self.buff.extend(ESC_a + b"\x00")
+
+    def add_horizontal_line(self, width=32, feed=2):
+        # Note this is a bit of a hack, just
+        # printing 32 underscores
+        line_char = b"_"
+        line = line_char * width
+        self.buff.extend(line)
+        if feed:
+            self.buff.extend(LF * feed)
